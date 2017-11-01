@@ -60,7 +60,7 @@ static int
 escaped_value(const char line[BUFSIZ], int i, char **value)
 {
   if (line[i] != '"')
-      goto FAIL;
+    goto FAIL;
   i++;
   if (line[i] == 0 || line[i] == '\n')
     goto FAIL;
@@ -168,7 +168,7 @@ parse_line(const char line[BUFSIZ], char **key, char **value)
   return -1;
 }
 
-static bool
+static void
 conf_parse_file(const char *filename,
                 void (*conf_keyvalue)(void *data, const char *key, const char *value),
                 void *data)
@@ -176,7 +176,7 @@ conf_parse_file(const char *filename,
   FILE *f = fopen(filename, "r");
   if (!f) {
     log_put(LOG_GROUP, LOG_CATEGORY, NFC_LOG_PRIORITY_INFO, "Unable to open file: %s", filename);
-    return false;
+    return;
   }
   char line[BUFSIZ];
 
@@ -200,7 +200,8 @@ conf_parse_file(const char *filename,
       }
     }
   }
-  return false;
+  fclose(f);
+  return;
 }
 
 static void
@@ -265,14 +266,7 @@ conf_devices_load(const char *dirname, nfc_context *context)
     log_put(LOG_GROUP, LOG_CATEGORY, NFC_LOG_PRIORITY_DEBUG, "Unable to open directory: %s", dirname);
   } else {
     struct dirent *de;
-#ifdef WIN32
     while ((de =  readdir(d)) != NULL)  {
-#else
-    struct dirent entry;
-    struct dirent *result;
-    while ((readdir_r(d, &entry, &result) == 0) && (result != NULL)) {
-      de = &entry;
-#endif
       // FIXME add a way to sort devices
       if (de->d_name[0] != '.') {
         const size_t filename_len = strlen(de->d_name);

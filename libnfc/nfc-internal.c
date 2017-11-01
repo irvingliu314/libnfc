@@ -201,6 +201,7 @@ prepare_initiator_data(const nfc_modulation nm, uint8_t **ppbtInitiatorData, siz
     break;
     case NMT_ISO14443A:
     case NMT_JEWEL:
+    case NMT_BARCODE:
     case NMT_DEP:
       *ppbtInitiatorData = NULL;
       *pszInitiatorData = 0;
@@ -242,7 +243,6 @@ connstring_decode(const nfc_connstring connstring, const char *driver_name, cons
   int res = sscanf(connstring, format, param0, param1, param2);
 
   if (res < 1 || ((0 != strcmp(param0, driver_name)) &&
-                  (bus_name != NULL) &&
                   (0 != strcmp(param0, bus_name)))) {
     // Driver name does not match.
     res = 0;

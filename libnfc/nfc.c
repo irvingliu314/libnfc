@@ -79,6 +79,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <assert.h>
 
 #include <nfc/nfc.h>
 
@@ -276,7 +277,7 @@ nfc_open(nfc_context *context, const nfc_connstring connstring)
       log_put(LOG_GROUP, LOG_CATEGORY, NFC_LOG_PRIORITY_DEBUG, "Unable to open \"%s\".", ncs);
       return NULL;
     }
-    for (uint32_t i = 0; i > context->user_defined_device_count; i++) {
+    for (uint32_t i = 0; i < context->user_defined_device_count; i++) {
       if (strcmp(ncs, context->user_defined_devices[i].connstring) == 0) {
         // This is a device sets by user, we use the device name given by user
         strcpy(pnd->name, context->user_defined_devices[i].name);
@@ -388,7 +389,7 @@ nfc_list_devices(nfc_context *context, nfc_connstring connstrings[], const size_
       pndl = pndl->next;
     }
   } else if (context->user_defined_device_count == 0) {
-    log_put(LOG_GROUP, LOG_CATEGORY, NFC_LOG_PRIORITY_INFO, "Warning: %s" , "user must specify device(s) manually when autoscan is disabled");
+    log_put(LOG_GROUP, LOG_CATEGORY, NFC_LOG_PRIORITY_INFO, "Warning: %s", "user must specify device(s) manually when autoscan is disabled");
   }
 
   return device_found;
@@ -601,9 +602,10 @@ nfc_initiator_list_passive_targets(nfc_device *pnd,
       break;
     }
     nfc_initiator_deselect_target(pnd);
-    // deselect has no effect on FeliCa and Jewel cards so we'll stop after one...
+    // deselect has no effect on FeliCa, Jewel and Thinfilm cards so we'll stop after one...
     // ISO/IEC 14443 B' cards are polled at 100% probability so it's not possible to detect correctly two cards at the same time
-    if ((nm.nmt == NMT_FELICA) || (nm.nmt == NMT_JEWEL) || (nm.nmt == NMT_ISO14443BI) || (nm.nmt == NMT_ISO14443B2SR) || (nm.nmt == NMT_ISO14443B2CT)) {
+    if ((nm.nmt == NMT_FELICA) || (nm.nmt == NMT_JEWEL) || (nm.nmt == NMT_BARCODE) ||
+        (nm.nmt == NMT_ISO14443BI) || (nm.nmt == NMT_ISO14443B2SR) || (nm.nmt == NMT_ISO14443B2CT)) {
       break;
     }
   }
@@ -645,7 +647,7 @@ nfc_initiator_poll_target(nfc_device *pnd,
  * @param pnd \a nfc_device struct pointer that represent currently used device
  * @param ndm desired D.E.P. mode (\a NDM_ACTIVE or \a NDM_PASSIVE for active, respectively passive mode)
  * @param nbr desired baud rate
- * @param ndiInitiator pointer \a nfc_dep_info struct that contains \e NFCID3 and \e General \e Bytes to set to the initiator device (optionnal, can be \e NULL)
+ * @param pndiInitiator pointer \a nfc_dep_info struct that contains \e NFCID3 and \e General \e Bytes to set to the initiator device (optionnal, can be \e NULL)
  * @param[out] pnt is a \a nfc_target struct pointer where target information will be put.
  * @param timeout in milliseconds
  *
@@ -673,7 +675,7 @@ nfc_initiator_select_dep_target(nfc_device *pnd,
  * @param pnd \a nfc_device struct pointer that represent currently used device
  * @param ndm desired D.E.P. mode (\a NDM_ACTIVE or \a NDM_PASSIVE for active, respectively passive mode)
  * @param nbr desired baud rate
- * @param ndiInitiator pointer \a nfc_dep_info struct that contains \e NFCID3 and \e General \e Bytes to set to the initiator device (optionnal, can be \e NULL)
+ * @param pndiInitiator pointer \a nfc_dep_info struct that contains \e NFCID3 and \e General \e Bytes to set to the initiator device (optionnal, can be \e NULL)
  * @param[out] pnt is a \a nfc_target struct pointer where target information will be put.
  * @param timeout in milliseconds
  *
@@ -972,7 +974,7 @@ nfc_target_init(nfc_device *pnd, nfc_target *pnt, uint8_t *pbtRx, const size_t s
  * @param pnd \a nfc_device struct pointer that represent currently used device
  *
  * This function switch the device in idle mode.
- * In initiator mode, the RF field is turned off and the device is set to low power mode (if avaible);
+ * In initiator mode, the RF field is turned off and the device is set to low power mode (if available);
  * In target mode, the emulation is stoped (no target available from external initiator) and the device is set to low power mode (if avaible).
  */
 int
@@ -1237,13 +1239,14 @@ static int
 nfc_device_validate_modulation(nfc_device *pnd, const nfc_mode mode, const nfc_modulation *nm)
 {
   int res;
-  const nfc_modulation_type *nmt;
+  const nfc_modulation_type *nmt = NULL;
   if ((res = nfc_device_get_supported_modulation(pnd, mode, &nmt)) < 0) {
     return res;
   }
+  assert(nmt != NULL);
   for (int i = 0; nmt[i]; i++) {
     if (nmt[i] == nm->nmt) {
-      const nfc_baud_rate *nbr;
+      const nfc_baud_rate *nbr = NULL;
       if (mode == N_INITIATOR) {
         if ((res = nfc_device_get_supported_baud_rate(pnd, nmt[i], &nbr)) < 0) {
           return res;
@@ -1253,6 +1256,7 @@ nfc_device_validate_modulation(nfc_device *pnd, const nfc_mode mode, const nfc_m
           return res;
         }
       }
+      assert(nbr != NULL);
       for (int j = 0; nbr[j]; j++) {
         if (nbr[j] == nm->nbr)
           return NFC_SUCCESS;
@@ -1353,6 +1357,8 @@ str_nfc_modulation_type(const nfc_modulation_type nmt)
       return "FeliCa";
     case NMT_JEWEL:
       return "Innovision Jewel";
+    case NMT_BARCODE:
+      return "Thinfilm NFC Barcode";
     case NMT_DEP:
       return "D.E.P.";
   }
